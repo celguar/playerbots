@@ -75,7 +75,11 @@ namespace ai
         WorldPosition(const uint32 mapid, const mGridPair grid) : WorldLocation(mapid, (32 - grid.first)* SIZE_OF_GRIDS, (32 - grid.second)* SIZE_OF_GRIDS, 0, 0) { add(); }
         WorldPosition(const SpellTargetPosition* pos) : WorldLocation(pos->target_mapId, pos->target_X, pos->target_Y, pos->target_Z) { add(); }
         WorldPosition(const TaxiNodesEntry* pos) : WorldLocation(pos->map_id, pos->x, pos->y, pos->z) { add(); }
+#ifdef MANGOSBOT_THREE
+        WorldPosition(const WorldSafeLocsEntry* pos) : WorldLocation(pos->map_id, pos->x, pos->y, pos->z, 0.f) { add(); }
+#else
         WorldPosition(const WorldSafeLocsEntry* pos) : WorldLocation(pos->map_id, pos->x, pos->y, pos->z, pos->o) { add(); }
+#endif
         WorldPosition(const PlayerInfo* pos) : WorldLocation(pos->mapId,pos->positionX, pos->positionY, pos->positionZ, pos->orientation) { add(); }
         
         virtual ~WorldPosition()
@@ -130,7 +134,11 @@ namespace ai
         bool isBg() const { return mapid == 30 || mapid == 489 || mapid == 529 || mapid == 566 || mapid == 607 || mapid == 628; }
         bool isArena() const { return mapid == 559 || mapid == 572 || mapid == 562 || mapid == 617 || mapid == 618; }
         bool isInWater() const { return getTerrain() ? getTerrain()->IsInWater(coord_x, coord_y, coord_z) : false; };
+#ifndef MANGOSBOT_THREE
         bool isUnderWater() const { return getTerrain() ? getTerrain()->IsUnderWater(coord_x, coord_y, coord_z) : false; };
+#else
+        bool isUnderWater() const { return getTerrain() ? getTerrain()->IsUnderwater(coord_x, coord_y, coord_z) : false; };
+#endif
 
         WorldPosition relPoint(const WorldPosition& center) const { return WorldPosition(mapid, coord_x - center.coord_x, coord_y - center.coord_y, coord_z - center.coord_z, orientation); }
         WorldPosition offset(const WorldPosition& center) const { return WorldPosition(mapid, coord_x + center.coord_x, coord_y + center.coord_y, coord_z + center.coord_z, orientation); }
@@ -220,8 +228,12 @@ namespace ai
         float getVisibilityDistance() { return getMap(0) ? getMap(0)->GetVisibilityDistance() : (isOverworld() ? World::GetMaxVisibleDistanceOnContinents() : World::GetMaxVisibleDistanceInInstances()); }
 
         bool IsInStaticLineOfSight(WorldPosition pos, float heightMod = 0.5f) const;
-#if defined(MANGOSBOT_TWO) || MAX_EXPANSION == 2
+#if defined(MANGOSBOT_TWO) || MAX_EXPANSION >= 2
+#ifdef MANGOSBOT_THREE
+        bool IsInLineOfSight(WorldPosition pos, float heightMod = 0.5f) const { return mapid == pos.mapid && getMap(getFirstInstanceId()) && getMap(getFirstInstanceId())->IsInLineOfSight(coord_x, coord_y, coord_z + heightMod, pos.coord_x, pos.coord_y, pos.coord_z + heightMod, 0); }
+#else
         bool IsInLineOfSight(WorldPosition pos, float heightMod = 0.5f) const { return mapid == pos.mapid && getMap(getFirstInstanceId()) && getMap(getFirstInstanceId())->IsInLineOfSight(coord_x, coord_y, coord_z + heightMod, pos.coord_x, pos.coord_y, pos.coord_z + heightMod, 0, true); }
+#endif
         bool GetHitPosition(WorldPosition& pos) const { return getMap(getFirstInstanceId())->GetHitPosition(coord_x, coord_y, coord_z, pos.coord_x, pos.coord_y, pos.coord_z,0, 0.0f);};
 #else
         bool IsInLineOfSight(WorldPosition pos, float heightMod = 0.5f) const { return mapid == pos.mapid && getMap(getFirstInstanceId()) && getMap(getFirstInstanceId())->IsInLineOfSight(coord_x, coord_y, coord_z + heightMod, pos.coord_x, pos.coord_y, pos.coord_z + heightMod, true); }

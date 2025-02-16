@@ -242,11 +242,19 @@ namespace ai
 
         float currentHeight() const { return coord_z - getHeight(); }
 
+#if MAX_EXPANSION < 3
         std::set<GenericTransport*> getTransports(uint32 entry = 0);
         void CalculatePassengerPosition(GenericTransport* transport);
         void CalculatePassengerOffset(GenericTransport* transport);
 
         bool isOnTransport(GenericTransport* transport);
+#else
+        std::set<Transport*> getTransports(uint32 entry = 0);
+        void CalculatePassengerPosition(Transport* transport);
+        void CalculatePassengerOffset(Transport* transport);
+
+        bool isOnTransport(Transport* transport);
+#endif
 
         GridPair getGridPair() const { return MaNGOS::ComputeGridPair(coord_x, coord_y); };
         std::vector<GridPair> getGridPairs(const WorldPosition& secondPos) const;

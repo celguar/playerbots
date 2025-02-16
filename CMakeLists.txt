@@ -137,6 +137,9 @@ endif()
 if ( ${CMAKE_PROJECT_NAME} MATCHES "WoTLK")
   add_definitions(-DMANGOSBOT_TWO)
 endif()
+if ( ${CMAKE_PROJECT_NAME} MATCHES "Cataclysm")
+  add_definitions(-DMANGOSBOT_THREE)
+endif()
 
 # Define ENABLE_MODULES if need
 if (BUILD_MODULES)

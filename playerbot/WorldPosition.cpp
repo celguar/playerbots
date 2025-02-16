@@ -357,7 +357,11 @@ bool WorldPosition::IsInStaticLineOfSight(WorldPosition pos, float heightMod) co
     float dstY = pos.coord_y;
     float dstZ = pos.coord_z + heightMod;
 
+#ifndef MANGOSBOT_THREE
     return VMAP::VMapFactory::createOrGetVMapManager()->isInLineOfSight(mapid, srcX, srcY, srcZ, dstX, dstY, dstZ, true);
+#else
+    return VMAP::VMapFactory::createOrGetVMapManager()->isInLineOfSight(mapid, srcX, srcY, srcZ, dstX, dstY, dstZ);
+#endif
 }
 
 bool WorldPosition::canFly() const
@@ -528,6 +532,7 @@ bool WorldPosition::HasFaction(const Team team) const
     return false;
 }
 
+#ifndef MANGOSBOT_THREE
 std::set<GenericTransport*> WorldPosition::getTransports(uint32 entry)
 {
     std::set<GenericTransport*> transports;
@@ -577,6 +582,60 @@ bool WorldPosition::isOnTransport(GenericTransport* transport)
 
     return GetHitPosition(below);
 }
+#else
+std::set<Transport*> WorldPosition::getTransports(uint32 entry)
+{
+    std::set<Transport*> transports;
+    for (auto transport : getMap(getFirstInstanceId())->GetTransports()) //Boats&Zeppelins.
+        if (!entry || transport->GetEntry() == entry)
+            transports.insert(transport);
+
+    if (transports.empty() || !entry) //Elevators&rams
+    {
+        for (auto gopair : getGameObjectsNear(0.0f, entry))
+        {
+            ObjectGuid guid = ObjectGuid(HIGHGUID_MO_TRANSPORT, gopair->first);
+            if (GameObject* go = getMap(getFirstInstanceId())->GetGameObject(guid))
+                if (Transport* transport = dynamic_cast<Transport*>(go))
+                    transports.insert(transport);
+        }
+    }
+
+    return transports;
+}
+
+void WorldPosition::CalculatePassengerPosition(Transport* transport)
+{
+    transport->CalculatePassengerPosition(coord_x, coord_y, coord_z, &orientation);
+}
+
+void WorldPosition::CalculatePassengerOffset(Transport* transport)
+{
+    transport->CalculatePassengerOffset(coord_x, coord_y, coord_z, &orientation);
+}
+
+bool WorldPosition::isOnTransport(Transport* transport)
+{
+    if (!transport)
+        return false;
+
+    WorldPosition trans(transport);
+
+    if (distance(trans) > 40.0f)
+        return false;
+
+    WorldPosition below(*this);
+
+    below.setZ(below.getZ() - 5.0f);
+
+    bool result0 = VMAP::VMapFactory::createOrGetVMapManager()->getObjectHitPos(mapid, coord_x, coord_y, coord_z + 0.5f, below.getX(), below.getY(), below.getZ(), below.coord_x, below.coord_y, below.coord_z, 0.0f);
+
+    if (result0)
+        return false;
+
+    return GetHitPosition(below);
+}
+#endif
 
 std::vector<GridPair> WorldPosition::getGridPairs(const WorldPosition& secondPos) const
 {
@@ -730,6 +789,7 @@ bool WorldPosition::loadMapAndVMap(uint32 mapId, uint32 instanceId, int x, int y
 
     if (!hasMmap)
     {
+#ifndef MANGOSBOT_THREE
 #ifndef MANGOSBOT_TWO
         if (mapId == 0 || mapId == 1 || mapId == 530 || mapId == 571)
             isLoaded = MMAP::MMapFactory::createOrGetMMapManager()->loadMap(sWorld.GetDataPath(), mapId, x, y);
@@ -747,6 +807,17 @@ bool WorldPosition::loadMapAndVMap(uint32 mapId, uint32 instanceId, int x, int y
         {
             if (MMAP::MMapFactory::createOrGetMMapManager()->loadMapInstance(sWorld.GetDataPath(), mapId, instanceId))
                 isLoaded = MMAP::MMapFactory::createOrGetMMapManager()->loadMap(sWorld.GetDataPath(), mapId, instanceId, x, y, 0);
+        }
+#endif
+#else
+        if (mapId == 0 || mapId == 1 || mapId == 530 || mapId == 571)
+        {
+            isLoaded = MMAP::MMapFactory::createOrGetMMapManager()->loadMap(mapId, x, y);
+        }
+        else
+        {
+            if (MMAP::MMapFactory::createOrGetMMapManager()->loadMapInstance(sWorld.GetDataPath(), mapId, instanceId))
+                isLoaded = MMAP::MMapFactory::createOrGetMMapManager()->loadMap(mapId, x, y);
         }
 #endif
 
@@ -825,6 +896,7 @@ std::vector<WorldPosition> WorldPosition::getPathStepFrom(const WorldPosition& s
 
     WorldPosition start = startPos, end = *this;
 
+#ifndef MANGOSBOT_THREE
     if (bot && bot->GetTransport())
     {
         start.CalculatePassengerOffset(bot->GetTransport());
@@ -840,6 +912,23 @@ std::vector<WorldPosition> WorldPosition::getPathStepFrom(const WorldPosition& s
         for (auto& p : points)
             bot->GetTransport()->CalculatePassengerPosition(p.x, p.y, p.z);
     }
+#else
+    if (bot && bot->IsPlayer() && ((Player*)bot)->GetTransport())
+    {
+        start.CalculatePassengerOffset(((Player*)bot)->GetTransport());
+        end.CalculatePassengerOffset(((Player*)bot)->GetTransport());
+    }
+
+    pathfinder->calculate(start.getVector3(), end.getVector3(), false);
+
+    points = pathfinder->getPath();
+
+    if (bot && bot->IsPlayer() && ((Player*)bot)->GetTransport())
+    {
+        for (auto& p : points)
+            ((Player*)bot)->GetTransport()->CalculatePassengerPosition(p.x, p.y, p.z);
+    }
+#endif
 
     type = pathfinder->getPathType();
 
@@ -1010,8 +1099,12 @@ bool WorldPosition::ClosestCorrectPoint(float maxRange, float maxHeight, uint32 
 
 bool WorldPosition::GetReachableRandomPointOnGround(const Player* bot, const float radius, const bool randomRange) 
 {
-#ifndef MANGOSBOT_TWO         
+#ifndef MANGOSBOT_TWO
+#ifdef MANGOSBOT_THREE
+    return getMap(bot ? bot->GetInstanceId() : getFirstInstanceId())->GetReachableRandomPointOnGround(bot->GetPhaseMask(), coord_x, coord_y, coord_z, radius);
+#else
     return getMap(bot ? bot->GetInstanceId() : getFirstInstanceId())->GetReachableRandomPointOnGround(coord_x, coord_y, coord_z, radius, randomRange);
+#endif
 #else
     return getMap(bot ? bot->GetInstanceId() : getFirstInstanceId())->GetReachableRandomPointOnGround(bot->GetPhaseMask(), coord_x, coord_y, coord_z, radius, randomRange);
 #endif
